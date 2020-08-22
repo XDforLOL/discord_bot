@@ -67,12 +67,14 @@ def get_prior_from_file(file_name:str) -> str:
         # file_content = f.readlines()
         # prior_row = file_content[-2]
         # timestamp, author, content = prior_row
-        if os.stat(file_name).st_size == 0:
-            return
-        else:
+        # if os.stat(file_name).st_size == 0:
+        #     return
+        # else:
+        try:
             timestamp, author, content = f.readlines()[-1].split("|")
             return [ITEM.replace('\n', '') for ITEM in [author, content]]
-
+        except IndexError:
+            logger.warning(f'{file_name} is empty')
 
 
 
