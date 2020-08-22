@@ -1,15 +1,19 @@
 import discord
 import logging
-import datetime
+from datetime import datetime
 import requests
 import sys
+import os
 from discord import message
-
+import coloredlogs
 
 token = open("token.txt","r").readline()
 client = discord.Client()
 logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+# logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+coloredlogs.install(level='DEBUG')
+LOGFILE = "chatlog.log"
+current_time = datetime.now()
 
 
 @client.event
@@ -25,21 +29,37 @@ async def on_member_join(member) -> str:
 
 @client.event
 async def on_message(message):
-    log_message(message)
+    if message.content.startswith('☁️ LastSeen'):
+        req_author = find_last_message(message.content.replace('☁️ LastSeen ', ''))
+        await message.channel.send(req_author)
     if message.content.startswith('☁️ Weather'):
-        city = weather_check(message.content.replace('☁️ Weather ', ''))
-        await message.channel.send(city)
+        weather_city = weather_check(message.content.replace('☁️ Weather ', ''))
+        await message.channel.send(weather_city)
     if is_spam(message):
         logging.info(f"I have deleted a message from {message.author}")
         await message.delete()
     else:
         logging.info("Message logged")
+        log_message(message)
 
 
-def log_message(message:message.Message, file_name:str="chatlog.log"):
-    current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+def log_message(message:message.Message, file_name:str=LOGFILE) -> str:
     with open(file_name, 'a', encoding="utf-8") as f:
-        f.writelines("\n{}|{}|{}".format(current_time, message.author, message.content.replace('\n ', '')))
+        f.writelines("\n{}|{}|{}".format(current_time.strftime('%Y-%m-%d %H:%M:%S'), message.author, message.content.replace('\n ', '')))
+
+# :cloud: LastSeen
+def find_last_message(req_author):
+    with open(LOGFILE, 'r', encoding="utf-8") as f:
+
+        rows = f.readlines()
+        len_list = len(rows)-1
+        # range(len_list, 0, -1)
+        for i in range(len_list, 0, -1):
+            timestamp, author, content = rows[i].split("|")
+            if req_author == author.split('#')[0]:
+                seconds = (current_time - datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')).total_seconds()
+                return f'{author} last message {seconds:.2f} was seconds ago ;)'
+
 
 
 def get_prior_from_file(file_name:str) -> str:
@@ -47,12 +67,18 @@ def get_prior_from_file(file_name:str) -> str:
         # file_content = f.readlines()
         # prior_row = file_content[-2]
         # timestamp, author, content = prior_row
-        timestamp, author, content = f.readlines()[-2].split("|")
-        return [ITEM.replace('\n', '') for ITEM in [author, content]]
+        if os.stat(file_name).st_size == 0:
+            return
+        else:
+            timestamp, author, content = f.readlines()[-1].split("|")
+            return [ITEM.replace('\n', '') for ITEM in [author, content]]
+
+
+
 
 
 def is_spam(message:message.Message, file_name:str= "chatlog.log") -> bool:
-    return get_prior_from_file(file_name) == str(message.author), message.content
+    return get_prior_from_file(file_name) == (str(message.author), message.content)
 
 
 def weather_check(city_name:str) -> str:
